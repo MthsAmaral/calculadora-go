@@ -1,0 +1,67 @@
+name: Publicação automática Calculadora Go
+on:
+  push:
+    branches:
+      - master # A sua branch principal chama-se master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+ 
+      - name: Cria um arquivo temporário para a chave privada
+        run: |
+          echo "${{ secrets.KEY }}" > /tmp/private_key
+          chmod 600 /tmp/private_key
+
+      - name: Realizando backup da aplicação atual
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "if [ -d /home/ubuntu/calculadora-go ]; then mkdir -p /home/ubuntu/backups && tar -czf /home/ubuntu/backups/calculadora_backup_\$(date +'%Y%m%d_%H%M%S').tar.gz /home/ubuntu/calculadora-go; fi"
+
+      - name: Criando a pasta da aplicação
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "sudo mkdir -p /home/ubuntu/calculadora-go"
+ 
+      - name: Ajustar permissões no servidor de Produção
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "sudo chown -R ubuntu:ubuntu /home/ubuntu/calculadora-go && sudo chmod -R 755 /home/ubuntu/calculadora-go"
+                      
+      - name: Transferindo os arquivos da aplicação
+        run: |
+          scp -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ${{ github.workspace }}/* ubuntu@${{ secrets.HOST }}:/home/ubuntu/calculadora-go
+ 
+      - name: Compilando a aplicação Golang
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "cd /home/ubuntu/calculadora-go && /usr/bin/go build -o app main.go"
+ 
+      - name: Reiniciando o serviço da aplicação
+        run: |
+          ssh -i /tmp/private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@${{ secrets.HOST }} \
+          "sudo systemctl restart calculadora-go.service"             
+ 
+      - name: Limpa o arquivo de chave privada após uso
+        if: always()
+        run: |
+           rm -f /tmp/private_key
+
+      - name: Notificação de Sucesso (Discord)
+        if: success()
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: '✅ Sucesso! Nova versão da Calculadora Go publicada.'
+
+      - name: Notificação de Erro (Discord)
+        if: failure()
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: '❌ Erro no Pipeline da Calculadora!'
