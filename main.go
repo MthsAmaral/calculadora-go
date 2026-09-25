@@ -152,7 +152,7 @@ func calculadoraHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/", calculadoraHandler)
 
-	porta := ":3000"
+	porta := ":3001"
 	log.Printf("Servidor HTTP iniciado em http://localhost%s", porta)
 	log.Fatal(http.ListenAndServe(porta, nil))
 }
